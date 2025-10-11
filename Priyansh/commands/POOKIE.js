@@ -3,23 +3,22 @@ const moment = require("moment-timezone");
 
 module.exports.config = {
     name: "pookie",
-    version: "1.0.1",
+    version: "2.0.0",
     hasPermssion: 0,
     credits: "💞 N-E-R-O-B",
-    description: "Smart, aesthetic, self-learning AI bot 🌸",
+    description: "Smart, aesthetic, self-learning AI bot 🌸 Always-on, auto-reply & teachable",
     commandCategory: "Chat 💬",
-    usages: "[text] OR teach [msg] - [reply]",
+    usages: "[text] OR teach [msg] - [reply] OR on/off",
     cooldowns: 2,
-    dependencies: {
-        axios: ""
-    },
+    dependencies: { axios: "" },
 };
 
 module.exports.onLoad = async function() {
     if (!global.pookieMessages) global.pookieMessages = new Set();
-    if (!global.pookieActive) global.pookieActive = true;
+    if (!global.pookieActive) global.pookieActive = true; // always-on globally
 };
 
+// Fetch reply from API
 async function getReply(text) {
     try {
         const res = await axios.get(
@@ -31,14 +30,13 @@ async function getReply(text) {
     }
 }
 
+// Commands that trigger teaching
 const teachingTriggers = ["teach", "pookie teach", "baby teach", "bot teach"];
 
 module.exports.run = async function({ api, event, args, Users }) {
     const { threadID, messageID, senderID } = event;
 
-    if (!args[0]) {
-        return api.sendMessage("🌸 Type something or teach me: teach [msg] - [reply]", threadID, messageID);
-    }
+    if (!args[0]) return api.sendMessage("🌸 Type something or teach me: teach [msg] - [reply]", threadID, messageID);
 
     const command = args[0].toLowerCase();
 
@@ -65,10 +63,10 @@ module.exports.run = async function({ api, event, args, Users }) {
     // ✅ Turn ON/OFF
     if (command === "on") {
         global.pookieActive = true;
-        return api.sendMessage("✅ Pookie is now active in this thread!", threadID, messageID);
+        return api.sendMessage("✅ Pookie is now active globally!", threadID, messageID);
     } else if (command === "off") {
         global.pookieActive = false;
-        return api.sendMessage("❌ Pookie is now inactive in this thread!", threadID, messageID);
+        return api.sendMessage("❌ Pookie is now inactive globally!", threadID, messageID);
     }
 
     // ✅ Normal message - auto reply
@@ -78,6 +76,7 @@ module.exports.run = async function({ api, event, args, Users }) {
     return api.sendMessage(replyText, threadID, messageID);
 };
 
+// ✅ Auto-reply when mentioned or replied to
 module.exports.handleEvent = async function({ api, event, Users }) {
     const { threadID, messageID, senderID, body, messageReply } = event;
     if (!global.pookieActive) return;
@@ -86,7 +85,11 @@ module.exports.handleEvent = async function({ api, event, Users }) {
     const triggerWords = ["pookie", "baby", "bot", "bott"];
     const bodyLower = body.toLowerCase();
 
-    if (triggerWords.some(w => bodyLower.includes(w)) || (messageReply && global.pookieMessages.has(messageReply.messageID))) {
+    // Trigger if bot is mentioned or replying to previous bot message
+    if (
+        triggerWords.some(w => bodyLower.includes(w)) ||
+        (messageReply && global.pookieMessages.has(messageReply.messageID))
+    ) {
         if (senderID === api.getCurrentUserID()) return;
 
         const replyText = await getReply(body);
