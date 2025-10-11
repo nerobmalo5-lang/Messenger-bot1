@@ -2,28 +2,22 @@ const axios = require("axios");
 const moment = require("moment-timezone");
 
 module.exports.config = {
-    name: "pookie",
-    version: "3.0.0",
+    name: "eshuu",
+    version: "1.0.0",
     hasPermssion: 0,
     credits: "💞 N-E-R-O-B",
-    description: "Teachable, flirty, smart AI bot 🌸 Auto-reply & teachable",
+    description: "Smart, flirty, always-on AI bot 🌸",
     commandCategory: "Chat 💬",
-    usages: "[text] OR teach [msg] - [reply] OR on/off",
+    usages: "[text] OR on/off",
     cooldowns: 2,
     dependencies: { axios: "" },
 };
 
 module.exports.onLoad = async function() {
-    if (!global.pookieActive) global.pookieActive = true;
-    if (!global.pookieMessages) global.pookieMessages = new Set();
+    if (!global.eshuuActive) global.eshuuActive = true;
+    if (!global.eshuuMessages) global.eshuuMessages = new Set();
 };
 
-// Commands that trigger teaching
-const teachingTriggers = ["teach", "pookie teach", "baby teach", "bot teach"];
-// Words that trigger playful/flirty bot replies
-const mentionTriggers = ["pookie", "baby", "bot", "bott"];
-
-// ✅ Fetch API reply
 async function getReply(text) {
     try {
         const res = await axios.get(
@@ -35,110 +29,53 @@ async function getReply(text) {
     }
 }
 
-// ✅ Main run: teach or auto-reply
+const mentionTriggers = ["eshuu", "baby", "bot", "bott"];
+
 module.exports.run = async function({ api, event, args, Users }) {
     const { threadID, messageID, senderID } = event;
+    if (!args[0]) return;
+
     const bodyLower = event.body.toLowerCase();
 
-    // ✅ Teach command
-    if (teachingTriggers.some(t => bodyLower.startsWith(t))) {
-        const info = await api.sendMessage(
-            "🌸 What question do you want to teach me? Reply to this message with the question.",
-            threadID,
-            messageID
-        );
-
-        global.client.handleReply.push({
-            step: 1,
-            name: "pookie_teach",
-            messageID: info.messageID,
-            author: senderID,
-            threadID
-        });
-        return;
-    }
-
-    // ✅ Mentioned / flirty replies
+    // Flirty replies when mentioned
     if (mentionTriggers.some(w => bodyLower.includes(w))) {
         const flirtyReplies = [
-            "🌸 Oi! Ami ekhane achi 😏",
-            "💞 Hey you! Bot is always watching 👀",
-            "😅 Haha, kemon aso? Ami pookie 😇",
-            "🔥 Flirt alert! Bot is in the house",
-            "🥰 Ami kintu tumar jonno ekhane",
-            "😎 Bot aache, tension nai",
-            "💬 Hello! Ki bolteso? Ami pookie 😏",
-            "💡 Ei bot kichu jante chai",
-            "🌟 Tumake dekhe bot excited hoye gelo 😝",
-            "😇 Haan haan, ami ekhane achi!",
-            "😍 Oi shona! Bot ekhane 😘"
+            "🌸 Ami ekhane! Kemon acho?",
+            "💖 Haa, ami eshuu! Tumake dekhe khushi laglo!",
+            "😉 Tumake miss korchi ❤️",
+            "🥰 Amake call koro, ami ready!",
+            "💌 Eshey amar sathe kotha bolo!",
+            "🌸 Ami ekhane, tumar kotha shunte chai!",
+            "💖 Tumake dekhte chai!",
+            "😎 Hey! Tumake welcome korchi",
+            "❤️ Ami eshuu, tumar friend always",
+            "✨ Ami ekhane, tumar sathe flirty kotha bolte ready!"
         ];
-        const replyText = flirtyReplies[Math.floor(Math.random() * flirtyReplies.length)];
-        global.pookieMessages.add(messageID);
-        return api.sendMessage(replyText, threadID, messageID);
+        const reply = flirtyReplies[Math.floor(Math.random() * flirtyReplies.length)];
+        global.eshuuMessages.add(messageID);
+        return api.sendMessage(reply, threadID, messageID);
     }
 
-    // ✅ Auto API reply if bot is active
-    if (!global.pookieActive) return;
+    // Normal auto-reply using API
+    if (!global.eshuuActive) return;
     const replyText = await getReply(args.join(" "));
-    global.pookieMessages.add(messageID);
+    global.eshuuMessages.add(messageID);
     return api.sendMessage(replyText, threadID, messageID);
 };
 
-// ✅ Handle teach steps
-module.exports.handleReply = async function({ api, event, handleReply, Users }) {
-    const { threadID, messageID, senderID, body } = event;
+module.exports.handleEvent = async function({ api, event, Users }) {
+    const { threadID, messageID, senderID, body, messageReply } = event;
+    if (!global.eshuuActive) return;
+    if (!body) return;
 
-    if (handleReply.name !== "pookie_teach" || handleReply.author !== senderID) return;
+    if (
+        mentionTriggers.some(w => body.toLowerCase().includes(w)) ||
+        (messageReply && global.eshuuMessages.has(messageReply.messageID))
+    ) {
+        if (senderID === api.getCurrentUserID()) return;
 
-    // Step 1: Receive question
-    if (handleReply.step === 1) {
-        const question = body.trim();
-        if (!question) return api.sendMessage("❌ Please type a valid question.", threadID, messageID);
-
-        const info = await api.sendMessage(
-            "🌸 Got it! Now reply to this message with the answer for this question.",
-            threadID,
-            messageID
-        );
-
-        global.client.handleReply.push({
-            step: 2,
-            name: "pookie_teach",
-            question: question,
-            messageID: info.messageID,
-            author: senderID,
-            threadID
-        });
-
-        // Delete previous bot message
-        api.unsendMessage(handleReply.messageID);
-        return;
-    }
-
-    // Step 2: Receive answer
-    if (handleReply.step === 2) {
-        const answer = body.trim();
-        const question = handleReply.question;
-        const userName = (await Users.getData(senderID)).name;
-        const timeDhaka = moment.tz("Asia/Dhaka").format("HH:mm:ss | DD/MM/YYYY");
-
-        try {
-            await axios.get(
-                encodeURI(`https://sim-a9ek.onrender.com/sim?type=teach&ask=${question}&ans=${answer}&apikey=PriyanshVip`)
-            );
-
-            // Delete temporary message
-            api.unsendMessage(handleReply.messageID);
-
-            // ✅ Final confirmation (won't be deleted)
-            await api.sendMessage(
-                `🌸 Teach Added Successfully!\n💬 Question: ${question}\n💡 Answer: ${answer}\n👤 Teacher: ${userName}\n⏱ Time (Dhaka): ${timeDhaka}`,
-                threadID
-            );
-        } catch (err) {
-            api.sendMessage(`⚠️ Error saving teach: ${err.message}`, threadID, messageID);
-        }
-        return;
+        const replyText = await getReply(body);
+        global.eshuuMessages.add(messageID);
+        return api.sendMessage(replyText, threadID, messageID);
     }
 };
