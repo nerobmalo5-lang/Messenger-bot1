@@ -1,51 +1,73 @@
+const axios = require("axios");
+
 module.exports.config = {
-    name: "sim",
-    version: "4.3.7",
+    name: "baby",
+    version: "1.0.0",
     hasPermssion: 0,
-    credits: "𝐏𝐫𝐢𝐲𝐚𝐧𝐬𝐡 𝐑𝐚𝐣𝐩𝐮𝐭",
-    description: "\x43\x68\x61\x74\x20\x77\x69\x74\x68\x20\x73\x69\x6d\x73\x69\x6d\x69\x20\x41\x49\x2e\x20\x46\x69\x78\x65\x64\x20\x62\x79\x20\ud835\udc0f\ud835\udc2b\ud835\udc22\ud835\udc32\ud835\udc1a\ud835\udc27\ud835\udc2c\ud835\udc21\x20\ud835\udc11\ud835\udc1a\ud835\udc23\ud835\udc29\ud835\udc2e\ud835\udc2d",
-    commandCategory: "Chat same sim",
-    usages: "[args]",
-    cooldowns: 5,
-    dependencies: {
-        axios: ""
-    },
-    envConfig: {
-        APIKEY: "Priyansh_1234567890"
-    }
-}
-async function simsimi(a, b, c) {
-    const axios = require("axios"),
-        { APIKEY } = global.configModule.sim,
-        g = (a) => encodeURIComponent(a);
-    try {
-        var { data: j } = await axios({ url: `https://sim-api-by-priyansh.glitch.me/sim?type=ask&ask=${g(a)}&apikey=PriyanshVip`, method: "GET" });
-        return { error: !1, data: j }
-    } catch (p) {
-        return { error: !0, data: {} }
-    }
-}
-module.exports.onLoad = async function() {
-    "undefined" == typeof global.manhG && (global.manhG = {}), "undefined" == typeof global.manhG.simsimi && (global.manhG.simsimi = new Map);
+    credits: "💞 Nerob & Dipto Style",
+    description: "SMART MODE Baby Bot 🌸 - Always on, Cute GF vibe, Banglish style",
+    commandCategory: "Chat 💬",
+    usages: "[text] OR teach [msg] - [reply1], [reply2]...",
+    cooldowns: 0
 };
-module.exports.handleEvent = async function({ api, event }) {
-    const { threadID, messageID, senderID, body } = event, g = (senderID) => api.sendMessage(senderID, threadID, messageID);
-    if (global.manhG.simsimi.has(threadID)) {
-        if (senderID == api.getCurrentUserID() || "" == body || messageID == global.manhG.simsimi.get(threadID)) return;
-        var { data, error } = await simsimi(body, api, event);
-        return !0 == error ? void 0 : !1 == data.answer ? g(data.error) : g(data.answer)
+
+// Base API (replace with your own if you want)
+const BASE_API = "https://sim-a9ek.onrender.com"; // Example API
+
+// Always On Map
+if (typeof global.smartBaby === "undefined") global.smartBaby = new Map();
+
+async function getReply(text, uid) {
+    try {
+        const res = await axios.get(`${BASE_API}/sim?type=ask&ask=${encodeURIComponent(text)}&apikey=PriyanshVip&senderID=${uid}`);
+        return res.data.reply || "🥺 Cutie, ami bujhi nai, ekto different bolo...";
+    } catch {
+        return "⚠️ Sorry baby, ami ekhon busy... pore try koro 😅";
     }
 }
-module.exports.run = async function({ api, event, args }) {
-    const { threadID, messageID } = event, body = (args) => api.sendMessage(args, threadID, messageID);
-    if (0 == args.length) return body("[ 𝐒𝐈𝐌 ] - You haven't entered a message yet.");
-    switch (args[0]) {
-        case "on":
-            return global.manhG.simsimi.has(threadID) ? body("[ 𝐒𝐈𝐌 ] - What happened after 2 times?") : (global.manhG.simsimi.set(threadID, messageID), body("[ 𝐒𝐈𝐌 ] - Make it successful."));
+
+module.exports.handleEvent = async function({ api, event, Users }) {
+    const { threadID, senderID, messageID, body } = event;
+    if (!body) return;
+
+    // Always on
+    if (!global.smartBaby.has(threadID)) global.smartBaby.set(threadID, true);
+    if (!global.smartBaby.get(threadID)) return;
+
+    // Prevent bot replying to itself
+    if (senderID == api.getCurrentUserID()) return;
+
+    // Fetch reply
+    const replyText = await getReply(body, senderID);
+    api.sendMessage(replyText, threadID, messageID);
+};
+
+module.exports.run = async function({ api, event, args, Users }) {
+    const { threadID, messageID, senderID } = event;
+    if (!args[0]) return api.sendMessage("🥰 Hey cutie! Amake kichu bolo, ba teach korte paro.", threadID, messageID);
+
+    const cmd = args[0].toLowerCase();
+    const input = args.slice(1).join(" ");
+
+    switch (cmd) {
+        case "teach":
+            if (!input.includes(" - ")) return api.sendMessage("❌ Cutie, use kor: baby teach [question] - [reply]", threadID, messageID);
+            const [ask, reply] = input.split(" - ");
+            await axios.get(`${BASE_API}/sim?type=teach&ask=${encodeURIComponent(ask)}&ans=${encodeURIComponent(reply)}&apikey=PriyanshVip&senderID=${senderID}`);
+            return api.sendMessage(`🌸 Perfect baby! Ami shikhe gelo 😘\n💬 ${ask} -> ${reply}`, threadID, messageID);
+
+        case "status":
+            return api.sendMessage(`🟢 Baby Smart Mode ON: ${global.smartBaby.get(threadID)}`, threadID, messageID);
+
         case "off":
-            return global.manhG.simsimi.has(threadID) ? (global.manhG.simsimi.delete(threadID), body("[ 𝐒𝐈𝐌 ] - easy success.")) : body("[ 𝐒𝐈𝐌 ] - Tao is starting to turn off.");
+            global.smartBaby.set(threadID, false);
+            return api.sendMessage("🔴 Baby mode off hoise 😢", threadID, messageID);
+
+        case "on":
+            global.smartBaby.set(threadID, true);
+            return api.sendMessage("🟢 Baby mode on holo 😘", threadID, messageID);
+
         default:
-            var { data, error } = await simsimi(args.join(" "), api, event);
-            return !0 == data ? void 0 : !1 == data.answer ? body(data.error) : body(data.answer);
+            return api.sendMessage("🥰 Cutie, ami bujhi nai! Commands: teach / on / off / status", threadID, messageID);
     }
 };
