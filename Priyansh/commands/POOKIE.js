@@ -1,103 +1,96 @@
 const axios = require("axios");
 const moment = require("moment-timezone");
 
-let active = true; // Always ON
-let triggers = ["baby", "pookie", "bot", "jan", "বেবি", "বট"]; // triggers in Banglish + Bangla
-
-// Teach storage (replace with API later for persistence)
-let globalMemory = {}; 
-
 module.exports.config = {
-  name: "pookie",
-  version: "1.0.0",
-  credits: "💞 N-E-R-O-B",
-  hasPermssion: 0,
-  description: "Always-on Pookie bot 🌸 Cute GF style chat, teachable by everyone",
-  commandCategory: "Chat 💬",
-  usages: "[text] OR teach [msg] - [reply]",
-  cooldowns: 1
+    name: "pookie",
+    version: "1.0.1",
+    hasPermssion: 0,
+    credits: "💞 N-E-R-O-B",
+    description: "Smart, aesthetic, self-learning AI bot 🌸",
+    commandCategory: "Chat 💬",
+    usages: "[text] OR teach [msg] - [reply]",
+    cooldowns: 2,
+    dependencies: {
+        axios: ""
+    },
 };
 
-// Handle all messages in threads
-module.exports.handleEvent = async function({ api, event, Users }) {
-  if (!active) return;
-
-  const { threadID, senderID, body, messageID } = event;
-  if (!body) return;
-
-  // Check if message contains trigger word
-  const messageLower = body.toLowerCase();
-  const isTriggered = triggers.some(word => messageLower.includes(word));
-  if (!isTriggered) return;
-
-  // Check if it has a learned reply
-  if (globalMemory[messageLower]) {
-    return api.sendMessage(globalMemory[messageLower], threadID);
-  }
-
-  // Default cute reply
-  const defaultReplies = [
-    "Awww 😍 tumi amake call koro!",
-    "Heyy cutie 💖 kemon aso?",
-    "💞 Pookie is always here for you!"
-  ];
-  const reply = defaultReplies[Math.floor(Math.random() * defaultReplies.length)];
-  api.sendMessage(reply, threadID);
+module.exports.onLoad = async function() {
+    if (!global.pookieMessages) global.pookieMessages = new Set();
+    if (!global.pookieActive) global.pookieActive = true;
 };
 
-// Command to teach Pookie
+async function getReply(text) {
+    try {
+        const res = await axios.get(
+            encodeURI(`https://sim-a9ek.onrender.com/sim?type=ask&ask=${text}&apikey=PriyanshVip`)
+        );
+        return res.data.answer || "😅 Sorry, ami ekhon bujhte parini...";
+    } catch (err) {
+        return "⚠️ Error fetching reply.";
+    }
+}
+
+const teachingTriggers = ["teach", "pookie teach", "baby teach", "bot teach"];
+
 module.exports.run = async function({ api, event, args, Users }) {
-  const { threadID, senderID, messageID } = event;
-  if (!args[0] || args[0].toLowerCase() !== "teach") {
-    return api.sendMessage("Use: teach [msg] - [reply]", threadID, messageID);
-  }
+    const { threadID, messageID, senderID } = event;
 
-  return api.sendMessage("[ Pookie ] - Reply to this message with the question you want to teach me!", threadID, (err, info) => {
-    global.client.handleReply.push({
-      step: 1,
-      name: "pookie",
-      messageID: info.messageID,
-      content: { id: senderID, ask: "", ans: "" }
-    });
-  }, messageID);
+    if (!args[0]) {
+        return api.sendMessage("🌸 Type something or teach me: teach [msg] - [reply]", threadID, messageID);
+    }
+
+    const command = args[0].toLowerCase();
+
+    // ✅ Teaching
+    if (teachingTriggers.includes(command) || teachingTriggers.some(t => event.body.toLowerCase().startsWith(t))) {
+        const input = event.body.split("-"); // split message at "-"
+        if (!input[1]) return api.sendMessage("❌ Format: teach [msg] - [reply]", threadID, messageID);
+
+        const question = input[0].replace(/teach|pookie teach|baby teach|bot teach/i, "").trim();
+        const answer = input[1].trim();
+        const userName = (await Users.getData(senderID)).name;
+        const timeZ = moment.tz("Asia/Kolkata").format("HH:mm:ss | DD/MM/YYYY");
+
+        try {
+            await axios.get(
+                encodeURI(`https://sim-a9ek.onrender.com/sim?type=teach&ask=${question}&ans=${answer}&apikey=PriyanshVip`)
+            );
+            return api.sendMessage(`🌸 Learned successfully!\n💬 ${question} -> ${answer}\n👤 Teacher: ${userName}\n⏱ ${timeZ}`, threadID, messageID);
+        } catch {
+            return api.sendMessage("⚠️ Error teaching message.", threadID, messageID);
+        }
+    }
+
+    // ✅ Turn ON/OFF
+    if (command === "on") {
+        global.pookieActive = true;
+        return api.sendMessage("✅ Pookie is now active in this thread!", threadID, messageID);
+    } else if (command === "off") {
+        global.pookieActive = false;
+        return api.sendMessage("❌ Pookie is now inactive in this thread!", threadID, messageID);
+    }
+
+    // ✅ Normal message - auto reply
+    if (!global.pookieActive) return;
+    const replyText = await getReply(args.join(" "));
+    global.pookieMessages.add(messageID);
+    return api.sendMessage(replyText, threadID, messageID);
 };
 
-// Handle teach replies step-by-step
-module.exports.handleReply = async function({ api, event, handleReply, Users }) {
-  const { threadID, messageID, senderID, body } = event;
-  let content = handleReply.content;
-  if (content.id !== senderID) return;
+module.exports.handleEvent = async function({ api, event, Users }) {
+    const { threadID, messageID, senderID, body, messageReply } = event;
+    if (!global.pookieActive) return;
+    if (!body) return;
 
-  const input = body.trim();
-  const sendC = (msg, step, content) => api.sendMessage(msg, threadID, (err, info) => {
-    global.client.handleReply.splice(global.client.handleReply.indexOf(handleReply), 1);
-    api.unsendMessage(handleReply.messageID);
-    global.client.handleReply.push({
-      step: step,
-      name: "pookie",
-      messageID: info.messageID,
-      content: content
-    });
-  }, messageID);
+    const triggerWords = ["pookie", "baby", "bot", "bott"];
+    const bodyLower = body.toLowerCase();
 
-  const send = (msg) => api.sendMessage(msg, threadID, messageID);
-  const timeZ = moment.tz("Asia/Kolkata").format("HH:mm:ss | DD/MM/YYYY");
+    if (triggerWords.some(w => bodyLower.includes(w)) || (messageReply && global.pookieMessages.has(messageReply.messageID))) {
+        if (senderID === api.getCurrentUserID()) return;
 
-  switch (handleReply.step) {
-    case 1:
-      content.ask = input;
-      sendC("[ Pookie ] - Reply to this message with the answer I should give.", 2, content);
-      break;
-
-    case 2:
-      content.ans = input;
-      globalMemory[content.ask.toLowerCase()] = content.ans; // Save in globalMemory
-      global.client.handleReply.splice(global.client.handleReply.indexOf(handleReply), 1);
-      api.unsendMessage(handleReply.messageID);
-      send(`[ Pookie ] - 🌸 Learned successfully!\n🤤 Data:\n"${content.ask}" -> "${content.ans}"\n⏱ Time: ${timeZ}`);
-      break;
-
-    default:
-      break;
-  }
+        const replyText = await getReply(body);
+        global.pookieMessages.add(messageID);
+        return api.sendMessage(replyText, threadID, messageID);
+    }
 };
