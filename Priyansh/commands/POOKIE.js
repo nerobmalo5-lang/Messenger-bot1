@@ -3,97 +3,101 @@ const moment = require("moment-timezone");
 
 module.exports.config = {
     name: "pookie",
-    version: "2.0.0",
+    version: "2.4.0",
     hasPermssion: 0,
     credits: "💞 N-E-R-O-B",
-    description: "Smart, aesthetic, self-learning AI bot 🌸 Always-on, auto-reply & teachable",
+    description: "Teachable AI bot 🌸 Teach flow with confirmation",
     commandCategory: "Chat 💬",
-    usages: "[text] OR teach [msg] - [reply] OR on/off",
+    usages: "[text] OR teach [msg] - [reply]",
     cooldowns: 2,
     dependencies: { axios: "" },
 };
 
 module.exports.onLoad = async function() {
+    if (!global.pookieActive) global.pookieActive = true;
     if (!global.pookieMessages) global.pookieMessages = new Set();
-    if (!global.pookieActive) global.pookieActive = true; // always-on globally
 };
-
-// Fetch reply from API
-async function getReply(text) {
-    try {
-        const res = await axios.get(
-            encodeURI(`https://sim-a9ek.onrender.com/sim?type=ask&ask=${text}&apikey=PriyanshVip`)
-        );
-        return res.data.answer || "😅 Sorry, ami ekhon bujhte parini...";
-    } catch (err) {
-        return "⚠️ Error fetching reply.";
-    }
-}
 
 // Commands that trigger teaching
 const teachingTriggers = ["teach", "pookie teach", "baby teach", "bot teach"];
 
+// ✅ Command: Start teach
 module.exports.run = async function({ api, event, args, Users }) {
     const { threadID, messageID, senderID } = event;
+    const bodyLower = event.body.toLowerCase();
 
-    if (!args[0]) return api.sendMessage("🌸 Type something or teach me: teach [msg] - [reply]", threadID, messageID);
+    if (!teachingTriggers.some(t => bodyLower.startsWith(t))) return;
 
-    const command = args[0].toLowerCase();
+    // Ask user for the question
+    const info = await api.sendMessage(
+        "🌸 What question do you want to teach me? Reply to this message with the question.",
+        threadID,
+        messageID
+    );
 
-    // ✅ Teaching
-    if (teachingTriggers.includes(command) || teachingTriggers.some(t => event.body.toLowerCase().startsWith(t))) {
-        const input = event.body.split("-"); // split message at "-"
-        if (!input[1]) return api.sendMessage("❌ Format: teach [msg] - [reply]", threadID, messageID);
-
-        const question = input[0].replace(/teach|pookie teach|baby teach|bot teach/i, "").trim();
-        const answer = input[1].trim();
-        const userName = (await Users.getData(senderID)).name;
-        const timeZ = moment.tz("Asia/Kolkata").format("HH:mm:ss | DD/MM/YYYY");
-
-        try {
-            await axios.get(
-                encodeURI(`https://sim-a9ek.onrender.com/sim?type=teach&ask=${question}&ans=${answer}&apikey=PriyanshVip`)
-            );
-            return api.sendMessage(`🌸 Learned successfully!\n💬 ${question} -> ${answer}\n👤 Teacher: ${userName}\n⏱ ${timeZ}`, threadID, messageID);
-        } catch {
-            return api.sendMessage("⚠️ Error teaching message.", threadID, messageID);
-        }
-    }
-
-    // ✅ Turn ON/OFF
-    if (command === "on") {
-        global.pookieActive = true;
-        return api.sendMessage("✅ Pookie is now active globally!", threadID, messageID);
-    } else if (command === "off") {
-        global.pookieActive = false;
-        return api.sendMessage("❌ Pookie is now inactive globally!", threadID, messageID);
-    }
-
-    // ✅ Normal message - auto reply
-    if (!global.pookieActive) return;
-    const replyText = await getReply(args.join(" "));
-    global.pookieMessages.add(messageID);
-    return api.sendMessage(replyText, threadID, messageID);
+    global.client.handleReply.push({
+        step: 1,
+        name: "pookie_teach",
+        messageID: info.messageID,
+        author: senderID,
+        threadID
+    });
 };
 
-// ✅ Auto-reply when mentioned or replied to
-module.exports.handleEvent = async function({ api, event, Users }) {
-    const { threadID, messageID, senderID, body, messageReply } = event;
-    if (!global.pookieActive) return;
-    if (!body) return;
+// ✅ Handle step 1: Receive question
+module.exports.handleReply = async function({ api, event, handleReply, Users }) {
+    const { threadID, messageID, senderID, body } = event;
 
-    const triggerWords = ["pookie", "baby", "bot", "bott"];
-    const bodyLower = body.toLowerCase();
+    if (handleReply.name !== "pookie_teach" || handleReply.step !== 1 || handleReply.author !== senderID) return;
+    const question = body.trim();
+    if (!question) return api.sendMessage("❌ Please type a valid question.", threadID, messageID);
 
-    // Trigger if bot is mentioned or replying to previous bot message
-    if (
-        triggerWords.some(w => bodyLower.includes(w)) ||
-        (messageReply && global.pookieMessages.has(messageReply.messageID))
-    ) {
-        if (senderID === api.getCurrentUserID()) return;
+    // Ask for answer
+    const info = await api.sendMessage(
+        "🌸 Got it! Now reply to this message with the answer for this question.",
+        threadID,
+        messageID
+    );
 
-        const replyText = await getReply(body);
-        global.pookieMessages.add(messageID);
-        return api.sendMessage(replyText, threadID, messageID);
+    global.client.handleReply.push({
+        step: 2,
+        name: "pookie_teach",
+        question: question,
+        messageID: info.messageID,
+        author: senderID,
+        threadID
+    });
+
+    // Delete previous message
+    api.unsendMessage(handleReply.messageID);
+};
+
+// ✅ Handle step 2: Receive answer and save
+module.exports.handleReplyAnswer = async function({ api, event, handleReply, Users }) {
+    const { threadID, messageID, senderID, body } = event;
+
+    if (handleReply.name !== "pookie_teach" || handleReply.step !== 2 || handleReply.author !== senderID) return;
+
+    const answer = body.trim();
+    const question = handleReply.question;
+    const userName = (await Users.getData(senderID)).name;
+    const timeDhaka = moment.tz("Asia/Dhaka").format("HH:mm:ss | DD/MM/YYYY");
+
+    try {
+        // Save to API
+        await axios.get(
+            encodeURI(`https://sim-a9ek.onrender.com/sim?type=teach&ask=${question}&ans=${answer}&apikey=PriyanshVip`)
+        );
+
+        // Delete temporary messages
+        api.unsendMessage(handleReply.messageID);
+
+        // ✅ Final confirmation (won't be deleted)
+        await api.sendMessage(
+            `🌸 Teach Added Successfully!\n💬 Question: ${question}\n💡 Answer: ${answer}\n👤 Teacher: ${userName}\n⏱ Time (Dhaka): ${timeDhaka}`,
+            threadID
+        );
+    } catch (err) {
+        api.sendMessage(`⚠️ Error saving teach: ${err.message}`, threadID, messageID);
     }
 };
