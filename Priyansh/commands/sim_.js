@@ -1,73 +1,60 @@
 const axios = require("axios");
 
+let active = true; // Always ON
+let triggers = ["baby", "pookie", "bot", "জান", "বেবি", "বট"]; // Add more Bangla if needed
+
+// Teach storage (in-memory for now; you can replace with API)
+let globalMemory = {}; 
+
 module.exports.config = {
-    name: "baby",
-    version: "1.0.0",
-    hasPermssion: 0,
-    credits: "💞 Nerob & Dipto Style",
-    description: "SMART MODE Baby Bot 🌸 - Always on, Cute GF vibe, Banglish style",
-    commandCategory: "Chat 💬",
-    usages: "[text] OR teach [msg] - [reply1], [reply2]...",
-    cooldowns: 0
+  name: "pookie",
+  version: "1.0.0",
+  credits: "💞 N-E-R-O-B",
+  hasPermssion: 0,
+  description: "Always-on Pookie bot 🌸 Cute GF style chat, teachable by everyone",
+  commandCategory: "Chat 💬",
+  usages: "[text] OR teach [msg] - [reply]",
+  cooldowns: 1
 };
 
-// Base API (replace with your own if you want)
-const BASE_API = "https://sim-a9ek.onrender.com"; // Example API
-
-// Always On Map
-if (typeof global.smartBaby === "undefined") global.smartBaby = new Map();
-
-async function getReply(text, uid) {
-    try {
-        const res = await axios.get(`${BASE_API}/sim?type=ask&ask=${encodeURIComponent(text)}&apikey=PriyanshVip&senderID=${uid}`);
-        return res.data.reply || "🥺 Cutie, ami bujhi nai, ekto different bolo...";
-    } catch {
-        return "⚠️ Sorry baby, ami ekhon busy... pore try koro 😅";
-    }
-}
-
+// Handle messages
 module.exports.handleEvent = async function({ api, event, Users }) {
-    const { threadID, senderID, messageID, body } = event;
-    if (!body) return;
+  if (!active) return;
 
-    // Always on
-    if (!global.smartBaby.has(threadID)) global.smartBaby.set(threadID, true);
-    if (!global.smartBaby.get(threadID)) return;
+  const { threadID, senderID, body } = event;
+  if (!body) return;
 
-    // Prevent bot replying to itself
-    if (senderID == api.getCurrentUserID()) return;
+  // Check if the message contains any trigger word
+  const messageLower = body.toLowerCase();
+  const isTriggered = triggers.some(word => messageLower.includes(word));
+  if (!isTriggered) return;
 
-    // Fetch reply
-    const replyText = await getReply(body, senderID);
-    api.sendMessage(replyText, threadID, messageID);
+  // Check if it has a learned reply
+  if (globalMemory[messageLower]) {
+    return api.sendMessage(globalMemory[messageLower], threadID);
+  }
+
+  // Default cute reply
+  const defaultReplies = [
+    "Awww 😍 tumi amake call koro!",
+    "Heyy cutie 💖 kemon aso?",
+    "💞 Pookie is always here for you!"
+  ];
+  const reply = defaultReplies[Math.floor(Math.random() * defaultReplies.length)];
+  api.sendMessage(reply, threadID);
 };
 
+// Command to teach Pookie
 module.exports.run = async function({ api, event, args, Users }) {
-    const { threadID, messageID, senderID } = event;
-    if (!args[0]) return api.sendMessage("🥰 Hey cutie! Amake kichu bolo, ba teach korte paro.", threadID, messageID);
+  const { threadID, senderID } = event;
+  if (args[0] !== "teach") return api.sendMessage("Use: teach [msg] - [reply]", threadID);
 
-    const cmd = args[0].toLowerCase();
-    const input = args.slice(1).join(" ");
+  const teachText = args.join(" ").split(" - ");
+  if (teachText.length < 2) return api.sendMessage("Format: teach [msg] - [reply]", threadID);
 
-    switch (cmd) {
-        case "teach":
-            if (!input.includes(" - ")) return api.sendMessage("❌ Cutie, use kor: baby teach [question] - [reply]", threadID, messageID);
-            const [ask, reply] = input.split(" - ");
-            await axios.get(`${BASE_API}/sim?type=teach&ask=${encodeURIComponent(ask)}&ans=${encodeURIComponent(reply)}&apikey=PriyanshVip&senderID=${senderID}`);
-            return api.sendMessage(`🌸 Perfect baby! Ami shikhe gelo 😘\n💬 ${ask} -> ${reply}`, threadID, messageID);
+  const key = teachText[0].toLowerCase();
+  const value = teachText[1];
 
-        case "status":
-            return api.sendMessage(`🟢 Baby Smart Mode ON: ${global.smartBaby.get(threadID)}`, threadID, messageID);
-
-        case "off":
-            global.smartBaby.set(threadID, false);
-            return api.sendMessage("🔴 Baby mode off hoise 😢", threadID, messageID);
-
-        case "on":
-            global.smartBaby.set(threadID, true);
-            return api.sendMessage("🟢 Baby mode on holo 😘", threadID, messageID);
-
-        default:
-            return api.sendMessage("🥰 Cutie, ami bujhi nai! Commands: teach / on / off / status", threadID, messageID);
-    }
+  globalMemory[key] = value; // Save globally
+  api.sendMessage(`🌸 Pookie learned a new reply!\n"${key}" -> "${value}"`, threadID);
 };
