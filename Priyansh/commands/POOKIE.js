@@ -1,193 +1,142 @@
-Got it 💫 — you want the Eshuu bot to stay just like before (active chat, mentions, flirty replies, toggle on/off) but also include a teach command,
-and you want it to respond if you type:
-
-> eshuu teach or teach or bot teach
-
-
-
-Basically, same full behavior as your previous eshuu.js, plus a new “teach” ability like your teach.js.
-Here’s your complete merged version 👇 — fully working with all features preserved.
-
-
----
-
 const axios = require("axios");
 const moment = require("moment-timezone");
 
+const BASE_API = "https://35c63274-98fb-4ff9-ac69-30075de6e659-00-1j7el920g36b.sisko.replit.dev";
+
+const baseApiUrl = async () => {
+  try {
+    const res = await axios.get(`${BASE_API}/sim?text=hello&lang=en`);
+    return res.data.api || BASE_API;
+  } catch (err) {
+    console.error("Failed to fetch base API:", err);
+    return BASE_API;
+  }
+};
+
 module.exports.config = {
-    name: "eshuu",
-    version: "1.2.0",
-    hasPermssion: 0,
-    credits: "💞 N-E-R-O-B",
-    description: "Smart, flirty, teachable AI bot 🌸",
-    commandCategory: "Chat 💬",
-    usages: "[text] | on/off | teach",
-    cooldowns: 2,
-    dependencies: { axios: "" },
+  name: "eshuu",
+  version: "7.1.1",
+  credits: "💞 N-E-R-O-B",
+  cooldowns: 0,
+  hasPermssion: 0,
+  description: "Smart, flirty, always-on AI bot 🌸",
+  commandCategory: "chat",
+  usePrefix: true,
+  prefix: true,
+  usages: `[anyMessage] OR
+teach [YourMessage] - [Reply1], [Reply2], [Reply3]... OR
+teach [react] [YourMessage] - [react1], [react2], [react3]... OR
+remove [YourMessage] OR
+rm [YourMessage] - [indexNumber] OR
+msg [YourMessage] OR
+list OR
+edit [YourMessage] - [NewMessage]`,
 };
 
-module.exports.onLoad = async function () {
-    if (typeof global.eshuuActive === "undefined") global.eshuuActive = true;
-    if (!global.eshuuMessages) global.eshuuMessages = new Set();
-};
+// 💬 always-on chat + teach logic
+module.exports.handleEvent = async function ({ api, event, Users }) {
+  try {
+    const { body, threadID, messageID, senderID } = event;
+    if (!body) return;
 
-async function getReply(text) {
+    const text = body.toLowerCase();
+    const callWords = ["eshuu", "bot", "baby", "বট"];
+
+    // trigger only when Eshuu is mentioned
+    if (!callWords.some((w) => text.includes(w))) return;
+
+    const link = `${await baseApiUrl()}/eshuu`;
+
     try {
-        const res = await axios.get(
-            encodeURI(`https://sim-a9ek.onrender.com/sim?type=ask&ask=${text}&apikey=PriyanshVip`)
-        );
-        return res.data.answer || "😅 Sorry, ami ekhono bujhte parini...";
-    } catch {
-        return "⚠️ Error fetching reply.";
+      // Query new API
+      const res = await axios.get(`${link}?text=${encodeURIComponent(text)}`);
+      return api.sendMessage(res.data.reply || "💞 Eshuu confused rn~", threadID, messageID);
+    } catch (err) {
+      console.error("Error fetching from new API:", err);
+      return api.sendMessage("💞 Eshuu confused rn~", threadID, messageID);
     }
-}
-
-const mentionTriggers = ["eshuu", "baby", "bot", "bott", "pookie"];
-
-module.exports.run = async function ({ api, event, args }) {
-    const { threadID, messageID, senderID } = event;
-
-    // ====== Teach feature triggers ======
-    const lowerArgs = args.join(" ").toLowerCase();
-    if (lowerArgs.startsWith("eshuu teach") || lowerArgs.startsWith("teach") || lowerArgs.startsWith("bot teach")) {
-        return api.sendMessage("📘 Reply to this message with the *question* you want to teach Eshuu 💬", threadID, (err, info) => {
-            global.client.handleReply.push({
-                step: 1,
-                name: this.config.name,
-                messageID: info.messageID,
-                content: { id: senderID, ask: "", ans: "" }
-            });
-        }, messageID);
-    }
-
-    // ====== Toggle on/off ======
-    if (args[0] === "on") {
-        global.eshuuActive = true;
-        return api.sendMessage("🌸 Eshuu is now active and listening~ 💞", threadID, messageID);
-    }
-    if (args[0] === "off") {
-        global.eshuuActive = false;
-        return api.sendMessage("💤 Eshuu is now sleeping... wake me up later 💤", threadID, messageID);
-    }
-
-    if (!args[0]) return api.sendMessage("💬 Type something for Eshuu to reply or use on/off/teach", threadID, messageID);
-
-    // ====== Normal Chat ======
-    if (!global.eshuuActive) return api.sendMessage("😴 Eshuu is off now.", threadID, messageID);
-
-    const replyText = await getReply(args.join(" "));
-    global.eshuuMessages.add(messageID);
-    return api.sendMessage(replyText, threadID, messageID);
+  } catch (err) {
+    console.error(err);
+  }
 };
 
-module.exports.handleEvent = async function ({ api, event }) {
-    const { threadID, messageID, senderID, body, messageReply } = event;
-    if (!global.eshuuActive || !body) return;
+// 🧠 teach + manage commands
+module.exports.run = async function ({ api, event, args, Users }) {
+  try {
+    const link = `${await baseApiUrl()}/eshuu`;
+    const dipto = args.join(" ").toLowerCase();
+    const uid = event.senderID;
 
-    if (event.isGroup && senderID == api.getCurrentUserID?.()) return;
+    if (!args[0])
+      return api.sendMessage("🌸 Bolo baby, ki chai bolo 💞", event.threadID, event.messageID);
 
-    // Mention or reply triggers
-    if (
-        mentionTriggers.some(w => body.toLowerCase().includes(w)) ||
-        (messageReply && global.eshuuMessages.has(messageReply.messageID))
-    ) {
-        const flirtyReplies = [
-            "🌸 Ami ekhane! Kemon acho?",
-            "💖 Haa, ami Eshuu! Tumake dekhe khushi laglo!",
-            "😉 Tumake miss korchi ❤️",
-            "🥰 Amake call koro, ami ready!",
-            "💌 Eshey amar sathe kotha bolo!",
-            "🌸 Ami ekhane, tumar kotha shunte chai!",
-            "💖 Tumake dekhte chai!",
-            "😎 Hey! Tumake welcome korchi~",
-            "❤️ Ami Eshuu, tumar friend always 💫",
-            "✨ Ami ekhane, flirty mode on~ 😘"
-        ];
-
-        const random = Math.random() < 0.5;
-        const replyText = random
-            ? flirtyReplies[Math.floor(Math.random() * flirtyReplies.length)]
-            : await getReply(body);
-
-        global.eshuuMessages.add(messageID);
-        return api.sendMessage(replyText, threadID, messageID);
+    // remove
+    if (args[0] === "remove") {
+      const fina = dipto.replace("remove ", "");
+      const res = await axios.get(`${link}?remove=${fina}`);
+      return api.sendMessage(res.data.message, event.threadID, event.messageID);
     }
-};
 
-// ====== Teach Handle Reply ======
-module.exports.handleReply = async function ({ api, event, handleReply }) {
-    const axios = require("axios");
-    const { threadID, messageID, senderID, body } = event;
-
-    if (handleReply.content.id != senderID) return;
-
-    const sendC = (msg, step, content) =>
-        api.sendMessage(msg, threadID, (err, info) => {
-            global.client.handleReply.splice(global.client.handleReply.indexOf(handleReply), 1);
-            api.unsendMessage(handleReply.messageID);
-            global.client.handleReply.push({
-                step: step,
-                name: module.exports.config.name,
-                messageID: info.messageID,
-                content: content
-            });
-        }, messageID);
-
-    const send = msg => api.sendMessage(msg, threadID, messageID);
-    const input = body.trim();
-    const content = handleReply.content;
-    const timeZ = moment.tz("Asia/Kolkata").format("HH:mm:ss | DD/MM/YYYY");
-
-    switch (handleReply.step) {
-        case 1:
-            content.ask = input;
-            sendC("📗 Great! Now reply to this message with the *answer* ✨", 2, content);
-            break;
-        case 2:
-            content.ans = input;
-            global.client.handleReply.splice(global.client.handleReply.indexOf(handleReply), 1);
-            api.unsendMessage(handleReply.messageID);
-
-            try {
-                let c = content;
-                let res = await axios.get(
-                    encodeURI(`https://sim-a9ek.onrender.com/sim?type=teach&ask=${c.ask}&ans=${c.ans}&apikey=PriyanshVip`)
-                );
-                if (res.data.error) return send(`⚠️ ${res.data.error}`);
-                send(
-                    `✅ [ Eshuu Learnt Successfully ]\n\n🧠 ${c.ask} → ${c.ans}\n\n🕒 ${timeZ}`
-                );
-            } catch {
-                send("⚠️ Error while teaching Eshuu.");
-            }
-            break;
+    // rm [text] - [index]
+    if (args[0] === "rm" && dipto.includes("-")) {
+      const [fi, f] = dipto.replace("rm ", "").split(" - ");
+      const res = await axios.get(`${link}?remove=${fi}&index=${f}`);
+      return api.sendMessage(res.data.message, event.threadID, event.messageID);
     }
+
+    // list
+    if (args[0] === "list") {
+      const res = await axios.get(`${link}?list=all`);
+      const data = res.data.teacher.teacherList;
+      const teachers = await Promise.all(
+        data.map(async (item) => {
+          const number = Object.keys(item)[0];
+          const value = item[number];
+          const userData = await Users.getData(number);
+          return { name: userData.name, value };
+        })
+      );
+      teachers.sort((a, b) => b.value - a.value);
+      const output = teachers.map((t, i) => `${i + 1}/ ${t.name}: ${t.value}`).join("\n");
+      return api.sendMessage(`👑 | List of Teachers of Eshuu\n\n${output}`, event.threadID, event.messageID);
+    }
+
+    // msg
+    if (args[0] === "msg") {
+      const msg = dipto.replace("msg ", "");
+      const res = await axios.get(`${link}?list=${msg}`);
+      return api.sendMessage(`Message ${msg} = ${res.data.data}`, event.threadID, event.messageID);
+    }
+
+    // edit
+    if (args[0] === "edit") {
+      const [cmd, newMsg] = dipto.split(" - ");
+      const key = cmd.replace("edit ", "");
+      const res = await axios.get(`${link}?edit=${key}&replace=${newMsg}`);
+      return api.sendMessage(`✅ Changed ${res.data.message}`, event.threadID, event.messageID);
+    }
+
+    // teach normal
+    if (args[0] === "teach" && args[1] !== "react") {
+      const [comd, command] = dipto.split(" - ");
+      const final = comd.replace("teach ", "");
+      const res = await axios.get(`${link}?teach=${final}&reply=${command}&senderID=${uid}`);
+      const userData = await Users.getData(res.data.teacher);
+      return api.sendMessage(
+        `✅ Replies added ${res.data.message}\nTeacher: ${userData.name}\nTeachs: ${res.data.teachs}`,
+        event.threadID,
+        event.messageID
+      );
+    }
+
+    // teach react
+    if (args[0] === "teach" && args[1] === "react") {
+      const [comd, command] = dipto.split(" - ");
+      const final = comd.replace("teach react ", "");
+      const res = await axios.get(`${link}?teach=${final}&react=${command}`);
+      return api.sendMessage(`✅ Reacts added ${res.data.message}`, event.threadID, event.messageID);
+    }
+  } catch (err) {
+    return api.sendMessage(`Error: ${err.message}`, event.threadID, event.messageID);
+  }
 };
-
-
----
-
-💡 How it works:
-
-You can now type any of these:
-
-eshuu teach
-teach
-bot teach
-
-→ It’ll start a step-by-step teaching process.
-
-You can still use:
-
-eshuu on
-eshuu off
-eshuu hello
-
-→ Normal chat + flirty + AI reply like before.
-
-
-
----
-
-Would you like me to make Eshuu remember local custom replies too (so even if API is down, her taught data still works)?
-
