@@ -2,94 +2,82 @@ const axios = require("axios");
 const moment = require("moment-timezone");
 
 module.exports.config = {
-    name: "teach",
-    version: "1.0.0",
+    name: ["eshuuteach", "teach", "botteach"], // multiple trigger names
+    version: "1.0.1",
     hasPermssion: 0,
     credits: "💞 N-E-R-O-B",
-    description: "Teach eshuu new responses 🌸",
-    commandCategory: "Chat 💬",
-    usages: "teach OR eshuu teach OR baby teach",
+    description: "Teach Eshuu how to reply cutely 💬",
+    commandCategory: "Eshuu 💖",
+    usages: "[question => answer]",
     cooldowns: 2,
-    dependencies: { axios: "" },
+    dependencies: { "axios": "" }
 };
 
-const teachingTriggers = ["teach", "eshuu teach", "baby teach", "bot teach"];
-
-module.exports.run = async function({ api, event, args, Users }) {
+// ───────────── 🩷 Step 1: Command trigger ─────────────
+module.exports.run = ({ api, event }) => {
     const { threadID, messageID, senderID } = event;
-    const bodyLower = event.body.toLowerCase();
 
-    if (!teachingTriggers.some(t => bodyLower.startsWith(t))) return;
-
-    // Ask user for question
-    const info = await api.sendMessage(
-        "🌸 What question do you want to teach eshuu? Reply to this message with the question.",
+    return api.sendMessage(
+        "🌸 𝗘𝘀𝗵𝘂𝘂 𝗧𝗲𝗮𝗰𝗵 𝗠𝗼𝗱𝗲 🌸\n\n💭 Reply to this message with the *question* you want Eshuu to learn~",
         threadID,
+        (err, info) => {
+            global.client.handleReply.push({
+                step: 1,
+                name: module.exports.config.name[0], // use first alias as main name
+                messageID: info.messageID,
+                content: { id: senderID, ask: "", ans: "" }
+            });
+        },
         messageID
     );
-
-    global.client.handleReply.push({
-        step: 1,
-        name: "teach_eshuu",
-        messageID: info.messageID,
-        author: senderID,
-        threadID
-    });
 };
 
-module.exports.handleReply = async function({ api, event, handleReply, Users }) {
+// ───────────── 🩷 Step 2: Handle replies ─────────────
+module.exports.handleReply = async ({ api, event, Users, handleReply }) => {
     const { threadID, messageID, senderID, body } = event;
+    const userName = (await Users.getData(senderID)).name;
+    const timeNow = moment.tz("Asia/Kolkata").format("hh:mm A, DD MMM YYYY");
 
-    if (handleReply.name !== "teach_eshuu" || handleReply.author !== senderID) return;
+    if (handleReply.content.id !== senderID) return;
 
-    // Step 1: Receive question
-    if (handleReply.step === 1) {
-        const question = body.trim();
-        if (!question) return api.sendMessage("❌ Please type a valid question.", threadID, messageID);
+    const sendC = (msg, step, content) =>
+        api.sendMessage(msg, threadID, (err, info) => {
+            global.client.handleReply.splice(global.client.handleReply.indexOf(handleReply), 1);
+            api.unsendMessage(handleReply.messageID);
+            global.client.handleReply.push({
+                step: step,
+                name: module.exports.config.name[0],
+                messageID: info.messageID,
+                content: content
+            });
+        }, messageID);
 
-        const info = await api.sendMessage(
-            "🌸 Got it! Now reply to this message with the answer for this question.",
-            threadID,
-            messageID
-        );
+    const send = (msg) => api.sendMessage(msg, threadID, messageID);
+    const content = handleReply.content;
+    const input = body.trim();
 
-        global.client.handleReply.push({
-            step: 2,
-            name: "teach_eshuu",
-            question: question,
-            messageID: info.messageID,
-            author: senderID,
-            threadID
-        });
+    switch (handleReply.step) {
+        case 1:
+            content.ask = input;
+            sendC("💖 Now reply with what Eshuu should answer to that question~", 2, content);
+            break;
 
-        // Delete temporary message
-        api.unsendMessage(handleReply.messageID);
-        return;
-    }
-
-    // Step 2: Receive answer
-    if (handleReply.step === 2) {
-        const answer = body.trim();
-        const question = handleReply.question;
-        const userName = (await Users.getData(senderID)).name;
-        const timeDhaka = moment.tz("Asia/Dhaka").format("HH:mm:ss | DD/MM/YYYY");
-
-        try {
-            // Save to API
-            await axios.get(
-                encodeURI(`https://sim-a9ek.onrender.com/sim?type=teach&ask=${question}&ans=${answer}&apikey=PriyanshVip`)
-            );
-
-            // Delete temp messages
+        case 2:
+            content.ans = input;
+            global.client.handleReply.splice(global.client.handleReply.indexOf(handleReply), 1);
             api.unsendMessage(handleReply.messageID);
 
-            // Confirmation message (won't be deleted)
-            await api.sendMessage(
-                `🌸 Teach Added Successfully!\n💬 Question: ${question}\n💡 Answer: ${answer}\n👤 Teacher: ${userName}\n⏱ Time (Dhaka): ${timeDhaka}`,
-                threadID
+            const res = await axios.get(
+                encodeURI(`https://sim-a9ek.onrender.com/sim?type=teach&ask=${content.ask}&ans=${content.ans}&apikey=PriyanshVip`)
             );
-        } catch (err) {
-            api.sendMessage(`⚠️ Error saving teach: ${err.message}`, threadID, messageID);
-        }
+
+            if (res.data.error)
+                return send(`⚠️ Error: ${res.data.error}`);
+
+            return send(
+                `🌸 **Eshuu learned something new!** 💕\n\n` +
+                `💭 **Question:** ${content.ask}\n💬 **Answer:** ${content.ans}\n\n` +
+                `👩‍🏫 Thanks, ${userName}!\n🕰 ${timeNow}`
+            );
     }
 };
