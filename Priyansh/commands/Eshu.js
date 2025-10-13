@@ -73,9 +73,9 @@ module.exports.run = async function ({ api, event, args, Users }) {
 
     if (!args[0]) {
       const ran = [
-        "💬 bolo na Eshuu is here~",
+        "💬 Bolo na, Eshuu is here~",
         "🌸 hmm tell me something...",
-        "✨ try typing: Teach hi - hello cutie~",
+        "✨ Try typing: Teach hi - hello cutie~",
         "🩵 I’m listening, baby~",
       ];
       return api.sendMessage(
@@ -85,24 +85,24 @@ module.exports.run = async function ({ api, event, args, Users }) {
       );
     }
 
-    // 🗑️ Remove message
+    // 🗑 Remove message
     if (args[0] === "remove") {
       const msg = input.replace("remove ", "");
-      const res = await axios.get(`${link}?remove=${msg}`);
+      const res = await axios.get(`${link}?remove=${encodeURIComponent(msg)}`);
       return api.sendMessage(res.data.message, event.threadID, event.messageID);
     }
 
-    // 🗑️ Remove specific index
+    // 🗑 Remove specific index
     if (args[0] === "rm" && input.includes("-")) {
       const [msg, index] = input.replace("rm ", "").split(" - ");
-      const res = await axios.get(`${link}?remove=${msg}&index=${index}`);
+      const res = await axios.get(`${link}?remove=${encodeURIComponent(msg)}&index=${encodeURIComponent(index)}`);
       return api.sendMessage(res.data.message, event.threadID, event.messageID);
     }
 
     // 📜 List all teachers
     if (args[0] === "list") {
       const res = await axios.get(`${link}?list=all`);
-      const list = res.data.teacher.teacherList;
+      const list = res.data.teacher?.teacherList || [];
       const teachers = await Promise.all(
         list.map(async (item) => {
           const id = Object.keys(item)[0];
@@ -112,20 +112,14 @@ module.exports.run = async function ({ api, event, args, Users }) {
         })
       );
       teachers.sort((a, b) => b.value - a.value);
-      const out = teachers
-        .map((t, i) => `${i + 1}. ${t.name}: ${t.value}`)
-        .join("\n");
-      return api.sendMessage(
-        `👑 Eshuu’s Teachers:\n${out}`,
-        event.threadID,
-        event.messageID
-      );
+      const out = teachers.map((t, i) => `${i + 1}. ${t.name}: ${t.value}`).join("\n");
+      return api.sendMessage(`👑 Eshuu’s Teachers:\n${out}`, event.threadID, event.messageID);
     }
 
     // 📩 Show message replies
     if (args[0] === "msg" || args[0] === "message") {
-      const msg = input.replace("msg ", "");
-      const res = await axios.get(`${link}?list=${msg}`);
+      const msg = input.replace(/^(msg|message) /, "");
+      const res = await axios.get(`${link}?list=${encodeURIComponent(msg)}`);
       return api.sendMessage(
         `💬 Message: ${msg}\nReplies: ${res.data.data}`,
         event.threadID,
@@ -138,24 +132,14 @@ module.exports.run = async function ({ api, event, args, Users }) {
       const [_, newMsg] = input.split(" - ");
       const oldMsg = args[1];
       if (!newMsg) {
-        return api.sendMessage(
-          "❌ | Use: edit [YourMessage] - [NewReply]",
-          event.threadID,
-          event.messageID
-        );
+        return api.sendMessage("❌ | Use: edit [YourMessage] - [NewReply]", event.threadID, event.messageID);
       }
-      const res = await axios.get(
-        `${link}?edit=${oldMsg}&replace=${newMsg}`
-      );
-      return api.sendMessage(
-        `✅ Changed successfully: ${res.data.message}`,
-        event.threadID,
-        event.messageID
-      );
+      const res = await axios.get(`${link}?edit=${encodeURIComponent(oldMsg)}&replace=${encodeURIComponent(newMsg)}`);
+      return api.sendMessage(`✅ Changed successfully: ${res.data.message}`, event.threadID, event.messageID);
     }
 
     // 📚 Teach replies — everyone can teach now
-    if (args[0].toLowerCase() === "teach" && args[1] !== "react") {
+    if (args[0] === "teach" && args[1] !== "react") {
       const [cmd, replies] = input.split(" - ");
       const msg = cmd.replace("teach ", "");
       if (!replies) {
@@ -166,18 +150,18 @@ module.exports.run = async function ({ api, event, args, Users }) {
         );
       }
       const res = await axios.get(
-        `${link}?teach=${msg}&reply=${replies}&senderID=${uid}`
+        `${link}?teach=${encodeURIComponent(msg)}&reply=${encodeURIComponent(replies)}&senderID=${uid}`
       );
       const userData = await Users.getData(uid);
       return api.sendMessage(
-        `✅ ${res.data.message}\n👩‍🏫 Teacher: ${userData.name}\n🗨️ Replies: ${res.data.teachs}`,
+        `✅ ${res.data.message}\n👩‍🏫 Teacher: ${userData.name}\n🗨️ Replies: ${res.data.replies?.join(", ")}`,
         event.threadID,
         event.messageID
       );
     }
 
     // 💖 Teach reactions
-    if (args[0].toLowerCase() === "teach" && args[1] === "react") {
+    if (args[0] === "teach" && args[1] === "react") {
       const [cmd, reacts] = input.split(" - ");
       const msg = cmd.replace("teach react ", "");
       if (!reacts) {
@@ -187,24 +171,19 @@ module.exports.run = async function ({ api, event, args, Users }) {
           event.messageID
         );
       }
-      const res = await axios.get(`${link}?teach=${msg}&react=${reacts}`);
-      return api.sendMessage(
-        `✅ Reactions added ${res.data.message}`,
-        event.threadID,
-        event.messageID
+      const res = await axios.get(
+        `${link}?teach=${encodeURIComponent(msg)}&react=${encodeURIComponent(reacts)}`
       );
+      return api.sendMessage(`✅ Reactions added ${res.data.message}`, event.threadID, event.messageID);
     }
 
     // 💬 Normal chatting
     const res = await axios.get(`${link}?text=${encodeURIComponent(input)}`);
     const reply = res.data.reply;
     return api.sendMessage(reply, event.threadID, event.messageID);
+
   } catch (e) {
     console.error("Eshuu error:", e);
-    return api.sendMessage(
-      `⚠️ Error: ${e.message}`,
-      event.threadID,
-      event.messageID
-    );
+    return api.sendMessage(`⚠️ Error: ${e.message}`, event.threadID, event.messageID);
   }
 };
