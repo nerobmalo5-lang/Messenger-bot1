@@ -7,14 +7,14 @@ const baseApiUrl = async () => {
 
 module.exports.config = {
   name: "eshuu",
-  version: "7.0.0",
+  version: "7.1.0",
   credits: "kurokami9",
   cooldowns: 0,
-  hasPermssion: 0,
+  hasPermission: 0, // ✅ anyone can use
   description: "Teachable Chat AI — Eshuu 💞",
   commandCategory: "chat",
-  usePrefix: true,
-  prefix: true,
+  usePrefix: false, // ✅ works without prefix
+  prefix: false,
   usages:
     `[anyMessage]\n` +
     `Teach [YourMessage] - [Reply1], [Reply2], [Reply3]...\n` +
@@ -24,6 +24,45 @@ module.exports.config = {
     `msg [YourMessage]\n` +
     `list OR list all\n` +
     `edit [YourMessage] - [NewMessage]`,
+};
+
+module.exports.handleEvent = async function ({ api, event, Users }) {
+  try {
+    const input = event.body?.toLowerCase();
+    if (!input) return;
+
+    // 🧠 Keywords that wake Eshuu
+    const triggerWords = [
+      "bby",
+      "baby",
+      "bot",
+      "eshubot",
+      "eshu",
+      "eshuu",
+      "বেবি",
+      "বট",
+      "এইশু",
+      "এইশু বট",
+    ];
+
+    // 👀 If someone calls Eshuu by name or cute word
+    if (triggerWords.some((w) => input.includes(w))) {
+      const cuteReplies = [
+        "🌸 Eshuu here, baby~ 💞",
+        "🩷 Haan bolo jaanu~",
+        "✨ hmm? you called me, cutie?",
+        "💬 always here for you~",
+        "😚 bolona, Eshuu is listening~",
+      ];
+      return api.sendMessage(
+        cuteReplies[Math.floor(Math.random() * cuteReplies.length)],
+        event.threadID,
+        event.messageID
+      );
+    }
+  } catch (e) {
+    console.error("Eshuu handleEvent error:", e);
+  }
 };
 
 module.exports.run = async function ({ api, event, args, Users }) {
@@ -115,7 +154,7 @@ module.exports.run = async function ({ api, event, args, Users }) {
       );
     }
 
-    // 📚 Teach replies
+    // 📚 Teach replies — everyone can teach now
     if (args[0].toLowerCase() === "teach" && args[1] !== "react") {
       const [cmd, replies] = input.split(" - ");
       const msg = cmd.replace("teach ", "");
