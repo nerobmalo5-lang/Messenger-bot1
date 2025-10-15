@@ -1,198 +1,110 @@
 const axios = require("axios");
 
-// ✅ Direct API URL: No need for an async function here.
-const BASE_API_URL = "https://eshu-api.onrender.com/eshuu";
-
 module.exports.config = {
     name: "eshuu",
-    version: "8.0.0", // Updated version number
-    credits: "Priyansh & Nerob (Improved by AI)",
-    cooldowns: 0,
-    hasPermission: 0,
-    description: "Teachable Chat AI — Eshuu 💞",
-    commandCategory: "chat",
-    usePrefix: false,
-    prefix: false,
-    usages: ` [anyMessage]
- Teach [YourMessage] - [Reply1], [Reply2], [Reply3]...
- Teach react [YourMessage] - [react1], [react2], [react3]...
- remove [YourMessage]
- list all
- edit [YourMessage] - [NewReply]
- `,
+    version: "1.1.0",
+    hasPermssion: 0,
+    credits: "Kurokami Ryuzaki",
+    description: "Always-on Banglish flirty girlfriend Eshuu 💋",
+    commandCategory: "ai",
+    usages: "[question]",
+    cooldowns: 2,
+    dependencies: { "axios": "" }
 };
 
-// --- Helper Function for API Communication ---
-async function callEshuuApi(event, endpoint) {
-    try {
-        const res = await axios.get(`${BASE_API_URL}${endpoint}`);
-        return res.data;
-    } catch (e) {
-        console.error("Eshuu API Call Error:", e);
-        return { 
-            message: "⚠️ Sorry, I could not connect to the Eshuu API right now. Please try again later.",
-            error: true
-        };
-    }
-}
+// API
+const API_URL = "https://kurokami-ryuzaki.onrender.com/chat";
 
-// 🌸 Triggered when user just says “Eshuu”, “baby”, “bot”, etc.
+// Memory
+const chatHistories = {};
+const customTeach = {};
+
+// Trigger words
+const triggerWords = ["eshuu", "eshu", "baby", "bby", "jaan", "bot", "bott", "বট"];
+
+// Main Run
+module.exports.run = async function ({ api, event, args }) {
+    const { threadID, messageID, senderID } = event;
+    let userMessage = args.join(" ");
+    if (!userMessage) return api.sendMessage("Bolona baby~ ki chao tumi? 💕", threadID, messageID);
+
+    // Store conversation
+    if (!chatHistories[senderID]) chatHistories[senderID] = [];
+
+    chatHistories[senderID].push(`User: ${userMessage}`);
+    if (chatHistories[senderID].length > 5) chatHistories[senderID].shift();
+
+    // If custom taught answer exists
+    if (customTeach[userMessage.toLowerCase()]) {
+        return api.sendMessage(customTeach[userMessage.toLowerCase()], threadID, messageID);
+    }
+
+    const fullChat = chatHistories[senderID].join("\n");
+
+    // Banglish Flirty Prompt
+    const gfPrompt = `
+Tumi Eshuu, ekta cute flirty Banglish girlfriend type meye 💋
+Masti, sweet insult, cute emoji use koro 😚
+Tumi ekdom human moto behave koro, kono bot na! Jodi keu bole tumi bot, tahole hasi kore roast koro 😜
+Tumi reply diba chhoto chhoto line e (max 2 line).
+Questioner answer beshi deep koro na, just flirty or sweet keep koro 😘
+If someone asks who made you — bolo "Nerob banaiyse amake, amar creator 💞".
+Now continue chat:
+
+${fullChat}
+`;
+
+    api.setMessageReaction("⌛", messageID, () => {}, true);
+
+    try {
+        const response = await axios.get(`${API_URL}?message=${encodeURIComponent(gfPrompt)}`);
+        let reply = response.data.reply || "Ufff baby~ kichu bujhte parlam na 😅";
+
+        chatHistories[senderID].push(`Eshuu: ${reply}`);
+        api.sendMessage(reply, threadID, messageID);
+        api.setMessageReaction("✅", messageID, () => {}, true);
+    } catch (err) {
+        console.error(err);
+        api.sendMessage("Awww baby~ Eshuu confused hoye geche 😭", threadID, messageID);
+        api.setMessageReaction("❌", messageID, () => {}, true);
+    }
+};
+
+// Auto Reply
 module.exports.handleEvent = async function ({ api, event }) {
-    try {
-        const input = event.body?.toLowerCase();
-        if (!input) return;
+    const { threadID, messageID, body, senderID } = event;
+    if (!body) return;
 
-        const triggerWords = [
-            "bby", "baby", "bot", "eshubot", "eshu", "eshuu", "বেবি", "বট", "এইশু", "এইশু বট"
-        ];
+    const text = body.toLowerCase();
 
-        if (triggerWords.some((w) => input === w || input.includes(` ${w} `) || input.startsWith(`${w} `) || input.endsWith(` ${w}`))) {
-            const cuteReplies = [
-                "🌸 Eshuu here, baby~ 💞", "🩷 Haan bolo jaanu~", "✨ Hmm? you called me, cutie?", 
-                "💬 Always here for you~", "😚 Bolona, Eshuu is listening~"
-            ];
-            return api.sendMessage(
-                cuteReplies[Math.floor(Math.random() * cuteReplies.length)],
-                event.threadID,
-                event.messageID
-            );
-        }
-    } catch (e) {
-        console.error("Eshuu handleEvent error:", e);
+    // Check for trigger words
+    if (triggerWords.some(w => text.includes(w))) {
+        const args = body.split(" ");
+        module.exports.run({ api, event, args });
     }
 };
 
-// 💬 Main run logic for commands and general chat
-module.exports.run = async function ({ api, event, args, Users }) {
-    const uid = event.senderID;
-    const fullInput = args.join(" ");
-    const command = args[0]?.toLowerCase();
+// Teach Feature
+module.exports.teach = function ({ api, event, args }) {
+    const { threadID, messageID } = event;
+    const input = args.join(" ").split("=>");
 
-    if (!command) {
-        const ran = [
-            "💬 Bolo na, Eshuu is here~", "🌸 Hmm tell me something...", "✨ Try typing: Teach hi - hello cutie~", 
-            "🩵 I’m listening, baby~",
-        ];
-        return api.sendMessage(
-            ran[Math.floor(Math.random() * ran.length)],
-            event.threadID,
-            event.messageID
-        );
+    if (input.length < 2)
+        return api.sendMessage("Use this format: teach question => answer 😘", threadID, messageID);
+
+    const question = input[0].trim().toLowerCase();
+    const answer = input[1].trim();
+
+    customTeach[question] = answer;
+    api.sendMessage(`Thik ache baby~ Eshuu rakhse মনে 💞\n🧠 Learned: ${question} = ${answer}`, threadID, messageID);
+};
+
+// Teach Command Wrapper
+module.exports.handleCommandEvent = async function ({ api, event }) {
+    const { body } = event;
+    if (!body) return;
+    if (body.toLowerCase().startsWith("teach ")) {
+        const args = body.slice(6).trim().split(" ");
+        module.exports.teach({ api, event, args });
     }
-
-    let endpoint = '';
-    let responseText = '';
-
-    // --- Command Handling ---
-
-    // 🗑 Remove message
-    if (command === "remove") {
-        const msg = fullInput.slice(command.length).trim();
-        if (!msg) return api.sendMessage("❌ Format: remove [YourMessage]", event.threadID, event.messageID);
-        endpoint = `?remove=${encodeURIComponent(msg)}`;
-    } 
-    
-    // 📜 List all
-    else if (command === "list" && args[1]?.toLowerCase() === "all") {
-        endpoint = `?list=all`;
-    } 
-    
-    // ✏️ Edit
-    else if (command === "edit") {
-        const splitIndex = fullInput.indexOf(" - ");
-        if (splitIndex === -1) {
-            return api.sendMessage("❌ Format: edit [YourMessage] - [NewReply]", event.threadID, event.messageID);
-        }
-        
-        const oldMsg = fullInput.substring(command.length + 1, splitIndex).trim();
-        const newReply = fullInput.substring(splitIndex + 3).trim(); // +3 to skip ' - '
-        
-        if (!oldMsg || !newReply) {
-             return api.sendMessage("❌ Format: edit [YourMessage] - [NewReply]", event.threadID, event.messageID);
-        }
-
-        endpoint = `?edit=${encodeURIComponent(oldMsg)}&replace=${encodeURIComponent(newReply)}`;
-    } 
-    
-    // 📚 Teach replies (anyone can teach)
-    else if (command === "teach" && args[1]?.toLowerCase() !== "react") {
-        const splitIndex = fullInput.indexOf(" - ");
-        if (splitIndex === -1) {
-            return api.sendMessage("❌ Format: Teach [YourMessage] - [Reply1], [Reply2], ...", event.threadID, event.messageID);
-        }
-        
-        const msg = fullInput.substring(command.length + 1, splitIndex).trim();
-        const replies = fullInput.substring(splitIndex + 3).trim(); // +3 to skip ' - '
-        
-        if (!msg || !replies) {
-            return api.sendMessage("❌ Format: Teach [YourMessage] - [Reply1], [Reply2], ...", event.threadID, event.messageID);
-        }
-        
-        endpoint = `?teach=${encodeURIComponent(msg)}&reply=${encodeURIComponent(replies)}&senderID=${uid}`;
-    }
-    
-    // ⚛️ Teach react
-    else if (command === "teach" && args[1]?.toLowerCase() === "react") {
-        const reactCmd = args.slice(2).join(" ");
-        const splitIndex = reactCmd.indexOf(" - ");
-        if (splitIndex === -1) {
-            return api.sendMessage("❌ Format: Teach react [YourMessage] - [react1], [react2], ...", event.threadID, event.messageID);
-        }
-
-        const msg = reactCmd.substring(0, splitIndex).trim();
-        const reacts = reactCmd.substring(splitIndex + 3).trim();
-
-        if (!msg || !reacts) {
-            return api.sendMessage("❌ Format: Teach react [YourMessage] - [react1], [react2], ...", event.threadID, event.messageID);
-        }
-
-        endpoint = `?teach_react=${encodeURIComponent(msg)}&react=${encodeURIComponent(reacts)}&senderID=${uid}`;
-    }
-    
-    // --- General Chat (If no command matches) ---
-    else {
-        // Assume it's a general message for the AI
-        endpoint = `?ask=${encodeURIComponent(fullInput)}&senderID=${uid}`;
-    }
-    
-    // --- Execute API Call ---
-    
-    if (endpoint) {
-        const res = await callEshuuApi(event, endpoint);
-        
-        if (res.error) {
-            return api.sendMessage(res.message, event.threadID, event.messageID);
-        }
-        
-        // Handle a successful response
-        if (command && ["teach", "edit", "remove"].includes(command)) {
-            // Commands that return structured data
-            const userData = await Users.getData(uid);
-            responseText = `✅ ${res.message}\n👩‍🏫 Teacher: ${userData.name || 'Unknown'}`;
-            if (res.replies) {
-                 responseText += `\n🗨️ Replies: ${res.replies.join(", ")}`;
-            }
-            if (res.reacts) {
-                 responseText += `\n⚛️ Reacts: ${res.reacts.join(", ")}`;
-            }
-        } else if (command === "list") {
-             responseText = `📚 ${res.message || "No messages taught yet!"}`;
-        } else {
-            // General "ask" or fallback response
-            responseText = res.message || "Hmm, I don't have a response for that. Care to teach me?";
-        }
-
-        // Final message send
-        if (res.react_reply) {
-            // This assumes the API can return a reaction
-            return api.setMessageReaction(res.react_reply, event.messageID, (err) => {
-                if (err) console.error("Reaction failed:", err);
-            }, true);
-        }
-        
-        return api.sendMessage(responseText, event.threadID, event.messageID);
-    }
-    
-    // Fallback if logic is somehow missed
-    return api.sendMessage("I'm confused. Please check the command usage.", event.threadID, event.messageID);
 };
