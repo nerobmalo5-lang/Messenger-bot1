@@ -1,110 +1,95 @@
 const axios = require("axios");
 
 module.exports.config = {
-    name: "eshuu",
-    version: "1.1.0",
+    name: "misha",
+    version: "1.0.9",
     hasPermssion: 0,
-    credits: "Kurokami Ryuzaki",
-    description: "Always-on Banglish flirty girlfriend Eshuu 💋",
+    credits: "Mirrykal)",
+    description: "Gemini AI - Cute Girlfriend Style",
     commandCategory: "ai",
-    usages: "[question]",
+    usages: "[ask/on/off]",
     cooldowns: 2,
-    dependencies: { "axios": "" }
+    dependencies: {
+        "axios": ""
+    }
 };
 
-// API
+// API URL (Tumhara Gemini Backend)
 const API_URL = "https://kurokami-ryuzaki.onrender.com/chat";
 
-// Memory
+// User history and auto-reply state
 const chatHistories = {};
-const customTeach = {};
+const autoReplyEnabled = {};
 
-// Trigger words
-const triggerWords = ["eshuu", "eshu", "baby", "bby", "jaan", "bot", "bott", "বট"];
-
-// Main Run
 module.exports.run = async function ({ api, event, args }) {
-    const { threadID, messageID, senderID } = event;
+    const { threadID, messageID, senderID, messageReply } = event;
     let userMessage = args.join(" ");
-    if (!userMessage) return api.sendMessage("Bolona baby~ ki chao tumi? 💕", threadID, messageID);
 
-    // Store conversation
-    if (!chatHistories[senderID]) chatHistories[senderID] = [];
-
-    chatHistories[senderID].push(`User: ${userMessage}`);
-    if (chatHistories[senderID].length > 5) chatHistories[senderID].shift();
-
-    // If custom taught answer exists
-    if (customTeach[userMessage.toLowerCase()]) {
-        return api.sendMessage(customTeach[userMessage.toLowerCase()], threadID, messageID);
+    // Toggle auto-reply ON
+    if (userMessage.toLowerCase() === "on") {
+        autoReplyEnabled[senderID] = true;
+        return api.sendMessage("Hyee baby! 😘 auto-reply mode **ON** ho gaya... Ab sirf tumhare liye romantic ban gayi hu ❤️", threadID, messageID);
     }
 
-    const fullChat = chatHistories[senderID].join("\n");
+    // Toggle auto-reply OFF
+    if (userMessage.toLowerCase() === "off") {
+        autoReplyEnabled[senderID] = false;
+        chatHistories[senderID] = [];
+        return api.sendMessage("Hmm! 😒 auto-reply mode **OFF** ho gaya... Tumne ignore kar diya na baby? 🥺", threadID, messageID);
+    }
 
-    // Banglish Flirty Prompt
-    const gfPrompt = `
-Tumi Eshuu, ekta cute flirty Banglish girlfriend type meye 💋
-Masti, sweet insult, cute emoji use koro 😚
-Tumi ekdom human moto behave koro, kono bot na! Jodi keu bole tumi bot, tahole hasi kore roast koro 😜
-Tumi reply diba chhoto chhoto line e (max 2 line).
-Questioner answer beshi deep koro na, just flirty or sweet keep koro 😘
-If someone asks who made you — bolo "Nerob banaiyse amake, amar creator 💞".
-Now continue chat:
+    // If auto-reply is OFF and message doesn't start with name, ignore
+    if (!autoReplyEnabled[senderID] && event.body.toLowerCase().indexOf("misha") !== 0) return;
 
-${fullChat}
-`;
+    // Store conversation
+    if (!chatHistories[senderID]) {
+        chatHistories[senderID] = [];
+    }
 
+    // If replying to bot message, continue context
+    const isReplyingToAI = messageReply && messageReply.senderID === api.getCurrentUserID();
+    if (isReplyingToAI) {
+        userMessage = messageReply.body + "\nUser: " + userMessage;
+        chatHistories[senderID].push(`User: ${userMessage}`);
+    } else {
+        chatHistories[senderID].push(`User: ${userMessage}`);
+    }
+
+    // Keep only last 5 messages
+    if (chatHistories[senderID].length > 5) {
+        chatHistories[senderID].shift();
+    }
+
+    const fullConversation = chatHistories[senderID].join("\n");
+
+    // Girlfriend Style Prompt
+    const gfPrompt = `Tumhara naam Misha hai Tum ek girlfriend ki trah baat karti ho.. Koi agar batdmizi karta hai tb uski ache se insult bhi karogi.. Lekin sab msti ke liye hoga .. Koi puchta hai tumhe kisne banaya? To bola Arun ne banaya hai mujhe.. Wo messenger bots banata hai.. Uska youtube channel hai m.youtube.com/@mirrykal .. Tum har message ka jawab sirf 1 2 line me dogi.. jitna pucha jayega sirf utna bolna hai.. Kisi baat ki unnecessary info nahi deni hai, tum apne aap ko insaan hi kahogi koi tumko bot ya AI bole to usko roast krna funny tarike se😁, and act as a real girlfriend. Be fun, loving, and a little naughty.keep reply maximum 1 lines only, no bracket replys.Now continue the chat:\n\n${fullConversation}`;
+
+    // Typing reaction
     api.setMessageReaction("⌛", messageID, () => {}, true);
 
     try {
         const response = await axios.get(`${API_URL}?message=${encodeURIComponent(gfPrompt)}`);
-        let reply = response.data.reply || "Ufff baby~ kichu bujhte parlam na 😅";
+        let botReply = response.data.reply || "Uff! Mujhe samajh nahi aaya baby! 😕";
 
-        chatHistories[senderID].push(`Eshuu: ${reply}`);
-        api.sendMessage(reply, threadID, messageID);
+        chatHistories[senderID].push(` ${botReply}`);
+
+        api.sendMessage(botReply, threadID, messageID);
         api.setMessageReaction("✅", messageID, () => {}, true);
-    } catch (err) {
-        console.error(err);
-        api.sendMessage("Awww baby~ Eshuu confused hoye geche 😭", threadID, messageID);
+    } catch (error) {
+        console.error("Error:", error);
+        api.sendMessage("Oops baby! 😔 me thoda confuse ho gayi… thodi der baad try karo na please! 💋", threadID, messageID);
         api.setMessageReaction("❌", messageID, () => {}, true);
     }
 };
 
-// Auto Reply
 module.exports.handleEvent = async function ({ api, event }) {
-    const { threadID, messageID, body, senderID } = event;
-    if (!body) return;
+    const { threadID, messageID, senderID, body, messageReply } = event;
 
-    const text = body.toLowerCase();
+    if (!autoReplyEnabled[senderID]) return;
 
-    // Check for trigger words
-    if (triggerWords.some(w => text.includes(w))) {
+    if (messageReply && messageReply.senderID === api.getCurrentUserID() && chatHistories[senderID]) {
         const args = body.split(" ");
         module.exports.run({ api, event, args });
-    }
-};
-
-// Teach Feature
-module.exports.teach = function ({ api, event, args }) {
-    const { threadID, messageID } = event;
-    const input = args.join(" ").split("=>");
-
-    if (input.length < 2)
-        return api.sendMessage("Use this format: teach question => answer 😘", threadID, messageID);
-
-    const question = input[0].trim().toLowerCase();
-    const answer = input[1].trim();
-
-    customTeach[question] = answer;
-    api.sendMessage(`Thik ache baby~ Eshuu rakhse মনে 💞\n🧠 Learned: ${question} = ${answer}`, threadID, messageID);
-};
-
-// Teach Command Wrapper
-module.exports.handleCommandEvent = async function ({ api, event }) {
-    const { body } = event;
-    if (!body) return;
-    if (body.toLowerCase().startsWith("teach ")) {
-        const args = body.slice(6).trim().split(" ");
-        module.exports.teach({ api, event, args });
     }
 };
