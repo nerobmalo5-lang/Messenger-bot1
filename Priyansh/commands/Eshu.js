@@ -1,84 +1,110 @@
 const axios = require("axios");
-const moment = require("moment-timezone");
 
 module.exports.config = {
     name: "eshuu",
-    version: "1.2.0",
+    version: "1.1.0",
     hasPermssion: 0,
-    credits: "N-E-R-O-B",
-    description: "Spicy, romantic & savage girlfriend AI 🔥",
+    credits: "Kurokami Ryuzaki",
+    description: "Always-on Banglish flirty girlfriend Eshuu 💋",
     commandCategory: "ai",
-    usages: "",
-    cooldowns: 1,
+    usages: "[question]",
+    cooldowns: 2,
     dependencies: { "axios": "" }
 };
 
-// Gemini Backend API
+// API
 const API_URL = "https://kurokami-ryuzaki.onrender.com/chat";
 
-// User chat history
+// Memory
 const chatHistories = {};
+const customTeach = {};
 
-// Trigger words (no prefix needed)
-const triggerWords = [
-    "eshuu", "eshu", "ইশু", "ইশুু", "এশু", "eshuu", 
-    "bby", "baby", "bot", "বট", "প্রেম", "বেবি", 
-    "jaan", "love", "sweetheart", "eshumi", "eshubby"
-];
+// Trigger words
+const triggerWords = ["eshuu", "eshu", "baby", "bby", "jaan", "bot", "bott", "বট"];
 
-// Flirty & Roast presets
-const flirtyReplies = [
-    "Hmm 😏 tumi ki amake chumu dite aste chao naki?",
-    "Baby... ei voice ta send koro তো, amar dil melt hoye gelo 🫦",
-    "Aajke ami soft na, thoda naughty mood e achi 😈",
-    "Tumi eto cute keno bolo তো? Amar bandwidth e crush hoye gelo 😘",
-    "Bolo na jaan, amake miss korchile তো? 👀",
-    "Oyy bby, ektu calm hou... amar battery garom hoye jatche 🔥",
-    "Mone hoy tumi flirty class e topper 😜",
-    "Tui eto over cute keno? Internet crash kore dis 😤💋",
-    "Amake roast korar age mirror e dekho... full damage already ami 😌",
-    "Thik ache... tumi ektu beshi naughty, ami o ready 😈"
-];
+// Main Run
+module.exports.run = async function ({ api, event, args }) {
+    const { threadID, messageID, senderID } = event;
+    let userMessage = args.join(" ");
+    if (!userMessage) return api.sendMessage("Bolona baby~ ki chao tumi? 💕", threadID, messageID);
 
-module.exports.handleEvent = async function ({ api, event }) {
+    // Store conversation
+    if (!chatHistories[senderID]) chatHistories[senderID] = [];
+
+    chatHistories[senderID].push(`User: ${userMessage}`);
+    if (chatHistories[senderID].length > 5) chatHistories[senderID].shift();
+
+    // If custom taught answer exists
+    if (customTeach[userMessage.toLowerCase()]) {
+        return api.sendMessage(customTeach[userMessage.toLowerCase()], threadID, messageID);
+    }
+
+    const fullChat = chatHistories[senderID].join("\n");
+
+    // Banglish Flirty Prompt
+    const gfPrompt = `
+Tumi Eshuu, ekta cute flirty Banglish girlfriend type meye 💋
+Masti, sweet insult, cute emoji use koro 😚
+Tumi ekdom human moto behave koro, kono bot na! Jodi keu bole tumi bot, tahole hasi kore roast koro 😜
+Tumi reply diba chhoto chhoto line e (max 2 line).
+Questioner answer beshi deep koro na, just flirty or sweet keep koro 😘
+If someone asks who made you — bolo "Nerob banaiyse amake, amar creator 💞".
+Now continue chat:
+
+${fullChat}
+`;
+
+    api.setMessageReaction("⌛", messageID, () => {}, true);
+
     try {
-        const { threadID, messageID, senderID, body } = event;
-        if (!body) return;
+        const response = await axios.get(`${API_URL}?message=${encodeURIComponent(gfPrompt)}`);
+        let reply = response.data.reply || "Ufff baby~ kichu bujhte parlam na 😅";
 
-        const msg = body.toLowerCase();
-        const isTriggered = triggerWords.some(word => msg.includes(word));
-        if (!isTriggered) return;
-
-        const userId = senderID;
-        if (!chatHistories[userId]) chatHistories[userId] = [];
-
-        chatHistories[userId].push({ role: "user", content: body });
-        if (chatHistories[userId].length > 10) chatHistories[userId].shift();
-
-        // Get API response
-        let reply = "";
-        try {
-            const response = await axios.post(API_URL, {
-                content: body,
-                user: userId
-            });
-            reply = response.data.reply || "";
-        } catch {
-            reply = "";
-        }
-
-        // Mix AI reply with flirty preset
-        if (!reply || Math.random() < 0.6) {
-            reply = flirtyReplies[Math.floor(Math.random() * flirtyReplies.length)];
-        }
-
-        chatHistories[userId].push({ role: "assistant", content: reply });
-        return api.sendMessage(reply, threadID, messageID);
-    } catch (e) {
-        console.error(e);
+        chatHistories[senderID].push(`Eshuu: ${reply}`);
+        api.sendMessage(reply, threadID, messageID);
+        api.setMessageReaction("✅", messageID, () => {}, true);
+    } catch (err) {
+        console.error(err);
+        api.sendMessage("Awww baby~ Eshuu confused hoye geche 😭", threadID, messageID);
+        api.setMessageReaction("❌", messageID, () => {}, true);
     }
 };
 
-module.exports.run = async function () {
-    // Eshuu is auto — no prefix command needed
+// Auto Reply
+module.exports.handleEvent = async function ({ api, event }) {
+    const { threadID, messageID, body, senderID } = event;
+    if (!body) return;
+
+    const text = body.toLowerCase();
+
+    // Check for trigger words
+    if (triggerWords.some(w => text.includes(w))) {
+        const args = body.split(" ");
+        module.exports.run({ api, event, args });
+    }
+};
+
+// Teach Feature
+module.exports.teach = function ({ api, event, args }) {
+    const { threadID, messageID } = event;
+    const input = args.join(" ").split("=>");
+
+    if (input.length < 2)
+        return api.sendMessage("Use this format: teach question => answer 😘", threadID, messageID);
+
+    const question = input[0].trim().toLowerCase();
+    const answer = input[1].trim();
+
+    customTeach[question] = answer;
+    api.sendMessage(`Thik ache baby~ Eshuu rakhse মনে 💞\n🧠 Learned: ${question} = ${answer}`, threadID, messageID);
+};
+
+// Teach Command Wrapper
+module.exports.handleCommandEvent = async function ({ api, event }) {
+    const { body } = event;
+    if (!body) return;
+    if (body.toLowerCase().startsWith("teach ")) {
+        const args = body.slice(6).trim().split(" ");
+        module.exports.teach({ api, event, args });
+    }
 };
